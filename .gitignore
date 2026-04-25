@@ -2,3 +2,9 @@ docs.txt
 .env
 claude.md
 requirements.md
+.venv
+gram-sphere/__pycache__
+gram-sphere/lib/__pycache__
+gram-sphere/router/__pycache__/*
+config/*
+firebase/*
