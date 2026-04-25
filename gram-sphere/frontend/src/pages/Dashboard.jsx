@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
+import LanguagePrompt from '../components/LanguagePrompt';
 import JobConnect from '../views/JobConnect';
 import Profile from '../views/Profile';
 import BazaarPulse from '../views/BazaarPulse';
@@ -12,6 +13,7 @@ const Dashboard = () => {
 
   return (
     <div className="flex h-screen bg-[#f3f4f6] text-gray-900 overflow-hidden font-sans">
+      <LanguagePrompt />
       <Sidebar 
         isOpen={isSidebarOpen} 
         onClose={() => setIsSidebarOpen(false)} 
