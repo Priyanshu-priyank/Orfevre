@@ -1,4 +1,5 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from typing import Optional
 from lib.firestore import db
 from lib.geo_validator import (
     extract_gps_from_image,
@@ -6,7 +7,7 @@ from lib.geo_validator import (
     validate_location,
     reverse_geocode
 )
-from lib.gemini import call_gemini_vision, call_gemini
+from lib.gemini import call_gemini
 from datetime import datetime
 import google.generativeai as genai
 import uuid
