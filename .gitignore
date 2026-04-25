@@ -11,3 +11,6 @@ config/*
 firebase/*
 node_modules/
 dist/
+.firebase
+__pycache__
+lib/__pycache__
