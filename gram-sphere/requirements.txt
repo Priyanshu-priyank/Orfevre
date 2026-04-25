@@ -6,3 +6,6 @@ google-generativeai
 python-dotenv
 cachetools
 python-multipart
+Pillow
+geopy
+exifread
