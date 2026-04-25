@@ -1,12 +1,15 @@
 import React from 'react';
 import { Home, Briefcase, Map, Target, User } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 const Sidebar = ({ isOpen, onClose, activeView, setActiveView }) => {
+  const { t } = useTranslation();
+
   const links = [
-    { id: 'jobconnect', name: 'JobConnect', icon: Target },
-    { id: 'profile', name: 'Profile', icon: User },
-    { id: 'bazaarpulse', name: 'BazaarPulse', icon: Briefcase },
-    { id: 'gramlens', name: 'GramLens', icon: Map },
+    { id: 'jobconnect', name: t('sidebar.jobconnect', 'JobConnect'), icon: Target },
+    { id: 'profile', name: t('sidebar.profile', 'Profile'), icon: User },
+    { id: 'bazaarpulse', name: t('sidebar.bazaarpulse', 'BazaarPulse'), icon: Briefcase },
+    { id: 'gramlens', name: t('sidebar.gramlens', 'GramLens'), icon: Map },
   ];
 
   return (
@@ -43,7 +46,7 @@ const Sidebar = ({ isOpen, onClose, activeView, setActiveView }) => {
               const Icon = link.icon;
               const isActive = activeView === link.id;
               return (
-                <button
+               <button
                   key={link.id}
                   onClick={() => {
                     setActiveView(link.id);
@@ -70,8 +73,8 @@ const Sidebar = ({ isOpen, onClose, activeView, setActiveView }) => {
                 U
               </div>
               <div className="flex flex-col">
-                <span className="text-sm font-bold text-gray-900">User Profile</span>
-                <span className="text-xs font-medium text-gray-500">Youth Account</span>
+                <span className="text-sm font-bold text-gray-900">{t('sidebar.user_profile', 'User Profile')}</span>
+                <span className="text-xs font-medium text-gray-500">{t('sidebar.youth_account', 'Youth Account')}</span>
               </div>
             </div>
           </div>

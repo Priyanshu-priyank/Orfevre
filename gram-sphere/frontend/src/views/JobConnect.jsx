@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Mic, Search, ChevronRight, MapPin, Building, Briefcase, Filter, ArrowLeft, CheckCircle2, Loader2 } from 'lucide-react';
+import { Mic, Search, ChevronRight, MapPin, Building, Briefcase, Filter, ArrowLeft, CheckCircle2, Loader2, ShieldCheck } from 'lucide-react';
 import { getGigs, getSkillGap } from '../api';
+import LiveVerificationModal from '../components/LiveVerificationModal';
 
 // Fallback categories shown when no gigs exist in Firestore
 const defaultCategories = [
@@ -26,6 +27,10 @@ const JobConnect = () => {
   const [error, setError] = useState(null);
   const [aiResults, setAiResults] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [applyingGig, setApplyingGig] = useState(null);
+  const [appliedGigs, setAppliedGigs] = useState(new Set());
+  const [statusFilter, setStatusFilter] = useState('All');
+  const [tokenFilter, setTokenFilter] = useState('Any');
 
   // Fetch gigs from the backend on mount
   useEffect(() => {
@@ -90,12 +95,44 @@ const JobConnect = () => {
 
   // View 2: Job Listings (Category Selected)
   if (selectedCategory) {
-    const filteredGigs = gigs.filter((g) =>
-      (g.title || '').toLowerCase().includes(selectedCategory.title.toLowerCase())
-    );
+    // Step 1: Filter by category — check title AND trade field
+    const categoryGigs = gigs.filter((g) => {
+      const title = (g.title || '').toLowerCase();
+      const trade = (g.trade || '').toLowerCase();
+      const cat = selectedCategory.title.toLowerCase();
+      return title.includes(cat) || trade.includes(cat) || cat.includes(title);
+    });
+
+    // Step 2: Apply Status filter
+    const statusFiltered = statusFilter === 'All'
+      ? categoryGigs
+      : categoryGigs.filter(g => (g.status || 'open').toLowerCase() === statusFilter.toLowerCase());
+
+    // Step 3: Apply Token Reward filter
+    const filteredGigs = tokenFilter === 'Any'
+      ? statusFiltered
+      : tokenFilter === '1 Token'
+        ? statusFiltered.filter(g => (g.tokensReward || 1) === 1)
+        : statusFiltered.filter(g => (g.tokensReward || 1) >= 2);
+
+    const clearFilters = () => {
+      setStatusFilter('All');
+      setTokenFilter('Any');
+    };
 
     return (
       <div className="flex flex-col h-full overflow-y-auto bg-[#f3f4f6]">
+        {/* Level 2 Verification Modal */}
+        {applyingGig && (
+          <LiveVerificationModal
+            gig={applyingGig}
+            onClose={() => setApplyingGig(null)}
+            onSuccess={(gig) => {
+              setAppliedGigs(prev => new Set([...prev, gig.id]));
+              setApplyingGig(null);
+            }}
+          />
+        )}
         {/* Header Section */}
         <div className="bg-white border-b border-gray-200 px-6 py-6 sticky top-0 z-10">
           <div className="max-w-7xl mx-auto flex flex-col">
@@ -108,6 +145,9 @@ const JobConnect = () => {
             </button>
             <h1 className="text-2xl font-bold text-[#1e293b]">
               {selectedCategory.title} Gigs — {filteredGigs.length} Available
+              {(statusFilter !== 'All' || tokenFilter !== 'Any') && (
+                <span className="ml-2 text-sm font-medium text-[#00875a] bg-green-50 border border-green-200 px-2 py-0.5 rounded-full align-middle">Filtered</span>
+              )}
             </h1>
           </div>
         </div>
@@ -130,7 +170,6 @@ const JobConnect = () => {
         )}
 
         <div className="max-w-7xl mx-auto w-full flex flex-col lg:flex-row gap-6 p-6 flex-1">
-          {/* Left Sidebar: Filters */}
           <aside className="w-full lg:w-64 flex-shrink-0">
             <div className="bg-white border border-gray-200 rounded-xl p-5 sticky top-28">
               <div className="flex items-center justify-between mb-4">
@@ -138,34 +177,68 @@ const JobConnect = () => {
                   <Filter className="w-4 h-4" />
                   Filters
                 </h3>
-                <button className="text-sm text-[#00875a] font-medium hover:underline">Clear all</button>
+                <button 
+                  onClick={clearFilters}
+                  className="text-sm text-[#00875a] font-medium hover:underline"
+                >
+                  Clear all
+                </button>
               </div>
 
               {/* Filter Section: Status */}
               <div className="mb-6">
                 <h4 className="font-semibold text-gray-900 mb-3 text-sm">Status</h4>
                 <div className="space-y-2.5">
-                  {['All', 'Open', 'Completed'].map(opt => (
-                    <label key={opt} className="flex items-center gap-3 cursor-pointer group">
-                      <div className={`w-4 h-4 rounded-full border border-gray-300 flex items-center justify-center group-hover:border-[#00875a] ${opt === 'All' ? '' : ''}`}>
-                        {opt === 'All' && <div className="w-2 h-2 rounded-full bg-[#00875a]"></div>}
-                      </div>
-                      <span className="text-sm text-gray-700">{opt}</span>
-                    </label>
-                  ))}
+                  {['All', 'open', 'completed'].map(opt => {
+                    const label = opt === 'All' ? 'All' : opt.charAt(0).toUpperCase() + opt.slice(1);
+                    const isSelected = statusFilter === opt;
+                    return (
+                      <button
+                        key={opt}
+                        onClick={() => setStatusFilter(opt)}
+                        className="flex items-center gap-3 cursor-pointer group w-full text-left"
+                      >
+                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors ${
+                          isSelected ? 'border-[#00875a]' : 'border-gray-300 group-hover:border-[#00875a]'
+                        }`}>
+                          {isSelected && <div className="w-2 h-2 rounded-full bg-[#00875a]"></div>}
+                        </div>
+                        <span className={`text-sm transition-colors ${
+                          isSelected ? 'text-[#00875a] font-bold' : 'text-gray-700 font-medium'
+                        }`}>{label}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Filter Section: Reward */}
+              {/* Filter Section: Token Reward */}
               <div>
                 <h4 className="font-semibold text-gray-900 mb-3 text-sm">Token Reward</h4>
                 <div className="space-y-2.5">
-                  {['Any', '1 Token', '2+ Tokens'].map(opt => (
-                    <label key={opt} className="flex items-center gap-3 cursor-pointer group">
-                      <div className="w-4 h-4 rounded border border-gray-300 group-hover:border-gray-400 flex items-center justify-center"></div>
-                      <span className="text-sm text-gray-700">{opt}</span>
-                    </label>
-                  ))}
+                  {['Any', '1 Token', '2+ Tokens'].map(opt => {
+                    const isSelected = tokenFilter === opt;
+                    return (
+                      <button
+                        key={opt}
+                        onClick={() => setTokenFilter(opt)}
+                        className="flex items-center gap-3 cursor-pointer group w-full text-left"
+                      >
+                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${
+                          isSelected ? 'border-[#00875a] bg-[#00875a]' : 'border-gray-300 group-hover:border-gray-400'
+                        }`}>
+                          {isSelected && (
+                            <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 10 10" fill="none">
+                              <path d="M1.5 5L4 7.5L8.5 2.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                          )}
+                        </div>
+                        <span className={`text-sm transition-colors ${
+                          isSelected ? 'text-[#00875a] font-bold' : 'text-gray-700 font-medium'
+                        }`}>{opt}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -175,8 +248,16 @@ const JobConnect = () => {
           <div className="flex-1 space-y-4">
             {filteredGigs.length === 0 && (
               <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
-                <p className="text-gray-500 font-medium">No gigs found in this category yet.</p>
-                <p className="text-sm text-gray-400 mt-1">Try seeding data or check back later.</p>
+                <p className="text-gray-500 font-medium">
+                  {categoryGigs.length === 0
+                    ? 'No gigs found in this category yet.'
+                    : 'No gigs match your current filters.'}
+                </p>
+                <p className="text-sm text-gray-400 mt-1">
+                  {categoryGigs.length === 0
+                    ? 'Try seeding data or check back later.'
+                    : <button onClick={clearFilters} className="text-[#00875a] font-semibold underline">Clear filters</button>}
+                </p>
               </div>
             )}
             {filteredGigs.map(gig => (
@@ -186,7 +267,14 @@ const JobConnect = () => {
                     <h2 className="text-lg font-bold text-gray-900 group-hover:text-[#00875a] transition-colors">{gig.title}</h2>
                     <p className="text-gray-500 font-medium text-sm mt-0.5">Vendor: {gig.vendorId}</p>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-[#00875a]" />
+                  {appliedGigs.has(gig.id) ? (
+                    <span className="flex items-center gap-1.5 bg-[#00875a] text-white text-xs font-bold px-3 py-1.5 rounded-full">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      Applied ✓
+                    </span>
+                  ) : (
+                    <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-[#00875a]" />
+                  )}
                 </div>
 
                 <div className="flex flex-col gap-2 mb-4">
@@ -196,10 +284,21 @@ const JobConnect = () => {
                   </div>
                 </div>
 
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 mt-4 justify-between items-center">
                   <span className={`text-xs font-semibold px-3 py-1.5 rounded-lg border ${gig.status === 'open' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
                     {gig.status || 'open'}
                   </span>
+                  {!appliedGigs.has(gig.id) ? (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setApplyingGig(gig); }}
+                      className="flex items-center gap-1.5 bg-[#00875a] hover:bg-[#006b47] text-white text-sm font-bold px-4 py-2 rounded-lg transition-colors shadow-sm"
+                    >
+                      <ShieldCheck className="w-4 h-4" />
+                      Apply (Verify Skill)
+                    </button>
+                  ) : (
+                    <span className="text-xs text-[#00875a] font-bold">Level 2 Verified ✓</span>
+                  )}
                 </div>
               </div>
             ))}
@@ -225,6 +324,7 @@ const JobConnect = () => {
         )}
 
         <div className="flex flex-col items-center gap-4 w-full max-w-2xl">
+          {/* 
           <div className="relative group">
              {micState === 'listening' && (
               <div className="absolute -inset-4 bg-[#00875a]/20 rounded-full animate-ping"></div>
@@ -254,7 +354,8 @@ const JobConnect = () => {
             {micState === 'idle' && "Tap to speak your skills"}
             {micState === 'listening' && "Listening..."}
             {micState === 'processing' && "AI is finding matching gigs..."}
-          </p>
+          </p> 
+          */}
 
           <div className="w-full relative mt-4">
             <Search className="w-5 h-5 text-gray-400 absolute left-4 top-1/2 transform -translate-y-1/2" />
