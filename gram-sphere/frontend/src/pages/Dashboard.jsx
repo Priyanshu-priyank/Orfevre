@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
+import LanguagePrompt from '../components/LanguagePrompt';
 import JobConnect from '../views/JobConnect';
 import Profile from '../views/Profile';
 import BazaarPulse from '../views/BazaarPulse';
@@ -11,7 +12,8 @@ const Dashboard = () => {
   const [activeView, setActiveView] = useState('jobconnect');
 
   return (
-    <div className="flex h-screen bg-[#f3f4f6] text-gray-900 overflow-hidden font-sans">
+    <div className="flex h-screen bg-[#FAFAFA] text-[#1D1C1D] overflow-hidden font-sans">
+      <LanguagePrompt />
       <Sidebar 
         isOpen={isSidebarOpen} 
         onClose={() => setIsSidebarOpen(false)} 
@@ -22,7 +24,7 @@ const Dashboard = () => {
       <div className="flex-1 flex flex-col min-w-0">
         <Header onOpenSidebar={() => setIsSidebarOpen(true)} />
         
-        <main className="flex-1 relative bg-[#f3f4f6] overflow-hidden">
+        <main className="flex-1 relative bg-[#FAFAFA] overflow-hidden">
           {activeView === 'jobconnect' && <JobConnect />}
           {activeView === 'profile' && <Profile />}
           {activeView === 'bazaarpulse' && <BazaarPulse />}
