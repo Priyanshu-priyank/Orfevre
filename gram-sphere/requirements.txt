@@ -5,6 +5,9 @@ firebase-admin
 google-generativeai
 python-dotenv
 cachetools
+python-multipartgunicorn
+uvicorn
+
 python-multipart
 Pillow
 geopy
