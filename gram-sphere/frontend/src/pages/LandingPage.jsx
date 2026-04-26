@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Smartphone } from 'lucide-react';
 import { useGoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../context/AuthContext';
+import ChatbotWidget from '../components/ChatbotWidget';
 
 const LandingPage = () => {
   const { login: authLogin } = useAuth();
@@ -385,6 +386,8 @@ const LandingPage = () => {
         </div>
       </footer>
 
+      {/* Navigation Chatbot Assistant */}
+      <ChatbotWidget />
     </div>
   );
 };
