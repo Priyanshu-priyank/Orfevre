@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import LanguagePrompt from '../components/LanguagePrompt';
+import ChatbotWidget from '../components/ChatbotWidget';
 import JobConnect from '../views/JobConnect';
 import Profile from '../views/Profile';
 import BazaarPulse from '../views/BazaarPulse';
@@ -41,8 +42,12 @@ const Dashboard = () => {
           )}
         </main>
       </div>
+
+      {/* Navigation Chatbot Assistant */}
+      <ChatbotWidget />
     </div>
   );
 };
 
 export default Dashboard;
+
