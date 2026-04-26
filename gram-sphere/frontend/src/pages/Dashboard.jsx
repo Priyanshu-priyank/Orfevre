@@ -7,7 +7,7 @@ import Profile from '../views/Profile';
 import BazaarPulse from '../views/BazaarPulse';
 import GramLens from '../views/GramLens';
 
-const Dashboard = () => {
+const Dashboard = ({ onLogout }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeView, setActiveView] = useState('jobconnect');
 
@@ -22,7 +22,7 @@ const Dashboard = () => {
       />
       
       <div className="flex-1 flex flex-col min-w-0">
-        <Header onOpenSidebar={() => setIsSidebarOpen(true)} />
+        <Header onOpenSidebar={() => setIsSidebarOpen(true)} onLogout={onLogout} />
         
         <main className="flex-1 relative bg-[#FAFAFA] overflow-hidden">
           {activeView === 'jobconnect' && <JobConnect />}

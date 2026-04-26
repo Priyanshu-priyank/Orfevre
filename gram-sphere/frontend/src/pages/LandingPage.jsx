@@ -1,10 +1,48 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Smartphone } from 'lucide-react';
+import { useGoogleLogin } from '@react-oauth/google';
 
 const LandingPage = ({ onLogin }) => {
   const [scrollState, setScrollState] = useState(0);
   const [isVisible, setIsVisible] = useState(false);
+  const [authError, setAuthError] = useState(null);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const scrollContainerRef = useRef(null);
+
+  const login = useGoogleLogin({
+    onSuccess: async (codeResponse) => {
+      setIsLoggingIn(true);
+      setAuthError(null);
+      try {
+        // Try to verify with backend first
+        const res = await fetch('http://localhost:8000/api/auth/google', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ credential: codeResponse.access_token })
+        });
+        const data = await res.json();
+        if (data.success) {
+          // Backend verified: use backend JWT
+          onLogin(data.token);
+        } else {
+          // Backend returned error: fallback to Google token directly
+          console.warn("Backend auth failed, using Google token as fallback:", data);
+          onLogin(codeResponse.access_token);
+        }
+      } catch (err) {
+        // Backend unreachable (not running): fallback to Google token directly
+        console.warn("Backend unreachable, using Google token as fallback:", err);
+        onLogin(codeResponse.access_token);
+      } finally {
+        setIsLoggingIn(false);
+      }
+    },
+    onError: (error) => {
+      console.error('Google Login Failed:', error);
+      setAuthError('Google sign-in failed. Please try again.');
+      setIsLoggingIn(false);
+    }
+  });
 
   useEffect(() => {
     setIsVisible(true);
@@ -64,13 +102,13 @@ const LandingPage = ({ onLogin }) => {
             </nav>
             <div className="flex items-center gap-4">
               <button 
-                onClick={onLogin}
+                onClick={() => login()}
                 className="hidden sm:block bg-transparent border border-white/50 text-white px-5 py-2 rounded uppercase font-bold text-[14px] hover:bg-white/10 transition-colors"
               >
                 Login
               </button>
               <button 
-                onClick={onLogin}
+                onClick={() => login()}
                 className="bg-white text-gray-900 px-5 py-2 rounded uppercase font-bold text-[14px] hover:bg-gray-100 transition-colors shadow-sm"
               >
                 Sign Up
@@ -101,9 +139,26 @@ const LandingPage = ({ onLogin }) => {
             Powered by Google Gemini — built for Bharat.
           </p>
 
-          <button onClick={onLogin} className="bg-[#007B55] hover:bg-[#006b47] text-white px-10 py-4 rounded-full font-bold transition-colors shadow-lg shadow-[#007B55]/40 text-[18px]">
-            Get Started Free
+          <button
+            onClick={() => login()}
+            disabled={isLoggingIn}
+            className="bg-[#007B55] hover:bg-[#006b47] disabled:bg-[#007B55]/60 disabled:cursor-wait text-white px-10 py-4 rounded-full font-bold transition-colors shadow-lg shadow-[#007B55]/40 text-[18px] flex items-center gap-3"
+          >
+            {isLoggingIn ? (
+              <>
+                <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                </svg>
+                Signing in...
+              </>
+            ) : (
+              <>Get Started Free</>
+            )}
           </button>
+          {authError && (
+            <p className="mt-4 text-red-400 text-sm font-medium bg-red-500/10 border border-red-400/30 px-4 py-2 rounded-lg">{authError}</p>
+          )}
         </div>
       </section>
 
