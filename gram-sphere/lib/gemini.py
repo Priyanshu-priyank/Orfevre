@@ -1,29 +1,32 @@
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import json
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-
-model = genai.GenerativeModel(
-    model_name="gemini-flash-latest",
-    generation_config=genai.GenerationConfig(
-        response_mime_type="application/json",   # structured output mode
-        temperature=0.3,                          # lower = more consistent
-    )
-)
-
+# Initialize the client with the new SDK
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+MODEL_ID = "gemini-2.0-flash"  # Using the latest recommended model
 
 async def call_gemini(prompt: str) -> dict:
     """
-    Call Gemini and parse the JSON response.
+    Call Gemini using the new google-genai SDK and parse the JSON response.
     Falls back to error dict instead of crashing the entire request.
     """
     try:
-        response = model.generate_content(prompt)
-        text     = response.text.strip()
+        # Use structured output configuration
+        response = client.models.generate_content(
+            model=MODEL_ID,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                temperature=0.3,
+            )
+        )
+        
+        text = response.text.strip()
 
         # Strip markdown fences if Gemini adds them despite JSON mode
         if text.startswith("```"):
@@ -34,6 +37,6 @@ async def call_gemini(prompt: str) -> dict:
         return json.loads(text)
 
     except json.JSONDecodeError:
-        return {"error": "Gemini returned invalid JSON", "raw": text}
+        return {"error": "Gemini returned invalid JSON", "raw": text if 'text' in locals() else "No text returned"}
     except Exception as e:
         return {"error": str(e)}
