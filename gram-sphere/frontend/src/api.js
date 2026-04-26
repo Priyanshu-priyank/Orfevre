@@ -169,3 +169,10 @@ export function postGig(data) {
   });
 }
 
+// ─── Chatbot ───────────────────────────────────────────
+export function sendChatMessage(message, language = 'en') {
+  return request('/chatbot', {
+    method: 'POST',
+    body: JSON.stringify({ message, language }),
+  });
+}
