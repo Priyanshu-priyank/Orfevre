@@ -7,11 +7,12 @@ load_dotenv()
 
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
+# Use gemini-1.5-flash — fast, cheap, widely available
 model = genai.GenerativeModel(
-    model_name="gemini-flash-latest",
+    model_name="gemini-1.5-flash",
     generation_config=genai.GenerationConfig(
-        response_mime_type="application/json",   # structured output mode
-        temperature=0.3,                          # lower = more consistent
+        response_mime_type="application/json",
+        temperature=0.3,
     )
 )
 
@@ -23,17 +24,18 @@ async def call_gemini(prompt: str) -> dict:
     """
     try:
         response = model.generate_content(prompt)
-        text     = response.text.strip()
+        text = response.text.strip()
 
         # Strip markdown fences if Gemini adds them despite JSON mode
         if text.startswith("```"):
-            text = text.split("```")[1]
+            parts = text.split("```")
+            text = parts[1] if len(parts) > 1 else parts[0]
             if text.startswith("json"):
                 text = text[4:]
 
-        return json.loads(text)
+        return json.loads(text.strip())
 
-    except json.JSONDecodeError:
-        return {"error": "Gemini returned invalid JSON", "raw": text}
+    except json.JSONDecodeError as e:
+        return {"error": f"Gemini returned invalid JSON: {str(e)}", "raw": text}
     except Exception as e:
         return {"error": str(e)}

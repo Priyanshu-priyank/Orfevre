@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Smartphone } from 'lucide-react';
 import { useGoogleLogin } from '@react-oauth/google';
+import { useAuth } from '../context/AuthContext';
 
-const LandingPage = ({ onLogin }) => {
+const LandingPage = () => {
+  const { login: authLogin } = useAuth();
   const [scrollState, setScrollState] = useState(0);
   const [isVisible, setIsVisible] = useState(false);
   const [authError, setAuthError] = useState(null);
@@ -23,16 +25,16 @@ const LandingPage = ({ onLogin }) => {
         const data = await res.json();
         if (data.success) {
           // Backend verified: use backend JWT
-          onLogin(data.token);
+          authLogin(data.token, data.user);
         } else {
           // Backend returned error: fallback to Google token directly
           console.warn("Backend auth failed, using Google token as fallback:", data);
-          onLogin(codeResponse.access_token);
+          authLogin(codeResponse.access_token);
         }
       } catch (err) {
         // Backend unreachable (not running): fallback to Google token directly
         console.warn("Backend unreachable, using Google token as fallback:", err);
-        onLogin(codeResponse.access_token);
+        authLogin(codeResponse.access_token);
       } finally {
         setIsLoggingIn(false);
       }
@@ -90,7 +92,7 @@ const LandingPage = ({ onLogin }) => {
                 <polyline points="9 22 9 12 15 12 15 22"></polyline>
               </svg>
             </div>
-            <span className="text-white font-bold text-[24px] tracking-tight">GramSphere</span>
+            <span className="text-white font-bold text-[24px] tracking-tight">YuvaShakti</span>
           </div>
 
           {/* Right: Navigation & Actions */}
@@ -129,7 +131,7 @@ const LandingPage = ({ onLogin }) => {
         {/* Hero Content */}
         <div className="relative z-10 flex flex-col items-center w-full max-w-[1280px] mx-auto mt-12">
           <h1 className="text-[64px] md:text-[96px] font-bold text-white text-center leading-tight mb-16 tracking-tight pb-2">
-            GramSphere
+            YuvaShakti
           </h1>
           <p className="text-2xl md:text-[28px] text-gray-200 text-center mb-6 max-w-4xl font-medium leading-relaxed">
             Empowering local economies. Connect, showcase your skills, and grow your community.
@@ -331,7 +333,7 @@ const LandingPage = ({ onLogin }) => {
                   <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
                   <polyline points="9 22 9 12 15 12 15 22"></polyline>
                 </svg>
-                <span className="text-[#1D1C1D] font-bold text-xl tracking-tight">GramSphere</span>
+                <span className="text-[#1D1C1D] font-bold text-xl tracking-tight">YuvaShakti</span>
               </div>
               <p className="text-gray-500 text-sm leading-relaxed">
                 Empowering local economies. Connect, showcase your skills, and grow your community in your own language.
@@ -374,7 +376,7 @@ const LandingPage = ({ onLogin }) => {
           
           {/* Bottom Bar */}
           <div className="border-t border-gray-200 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
-            <p className="text-gray-400 text-sm">© {new Date().getFullYear()} GramSphere Network. All rights reserved.</p>
+            <p className="text-gray-400 text-sm">© {new Date().getFullYear()} YuvaShakti Network. All rights reserved.</p>
             <div className="flex items-center gap-2 text-sm text-gray-400 font-medium">
               <span className="w-2 h-2 rounded-full bg-blue-500"></span>
               Powered by Google Gemini

@@ -24,6 +24,9 @@ class UserUpdateRequest(BaseModel):
 class GoogleAuthRequest(BaseModel):
     credential: str
 
+class SetRoleRequest(BaseModel):
+    role: str
+
 # -- POST /auth/google ----------------------------------------------------
 @router.post("/auth/google")
 async def google_auth(body: GoogleAuthRequest):
@@ -58,7 +61,7 @@ async def google_auth(body: GoogleAuthRequest):
                 "name": name,
                 "picture": picture,
                 "google_id": google_id,
-                "role": "youth",
+                "role": None,
                 "trade": "",
                 "district": "",
                 "trustScore": 50,
@@ -76,6 +79,8 @@ async def google_auth(body: GoogleAuthRequest):
         payload = {
             "user_id": user_id,
             "email": email,
+            "name": user_data.get("name"),
+            "role": user_data.get("role"),
             "exp": datetime.datetime.utcnow() + datetime.timedelta(days=7)
         }
         token = jwt.encode(payload, JWT_SECRET, algorithm="HS256")
@@ -93,6 +98,46 @@ async def google_auth(body: GoogleAuthRequest):
         }
     except ValueError as e:
         raise HTTPException(status_code=401, detail=f"Invalid Google token: {str(e)}")
+
+
+# -- POST /auth/set-role --------------------------------------------------
+@router.post("/auth/set-role")
+async def set_role(body: SetRoleRequest, user_id: str):
+    """Set the role for a newly registered user."""
+    if body.role not in ["youth", "merchant", "official"]:
+        raise HTTPException(status_code=400, detail="Invalid role")
+
+    ref = db.collection("users").document(user_id)
+    snap = ref.get()
+    if not snap.exists:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user_data = snap.to_dict()
+    if user_data.get("role"):
+        raise HTTPException(status_code=400, detail="Role already set")
+
+    ref.update({"role": body.role})
+    
+    # Generate new JWT with updated role
+    payload = {
+        "user_id": user_id,
+        "email": user_data.get("email"),
+        "name": user_data.get("name"),
+        "role": body.role,
+        "exp": datetime.datetime.utcnow() + datetime.timedelta(days=7)
+    }
+    token = jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+
+    return {
+        "success": True,
+        "token": token,
+        "user": {
+            "id": user_id,
+            "name": user_data.get("name"),
+            "email": user_data.get("email"),
+            "role": body.role
+        }
+    }
 
 
 # -- GET /user/{user_id} --------------------------------------------------

@@ -43,7 +43,7 @@ const Header = ({ onOpenSidebar, onLogout }) => {
         </button>
         
         {/* Page Title (Mobile only) */}
-        <span className="md:hidden text-gray-900 font-bold tracking-tight text-lg">GramSphere</span>
+        <span className="md:hidden text-gray-900 font-bold tracking-tight text-lg">YuvaShakti</span>
       </div>
 
       <div className="flex items-center gap-3">
