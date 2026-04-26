@@ -65,6 +65,43 @@ export function matchSchemes(userId) {
   return request(`/match-schemes/${userId}`);
 }
 
+// ─── Verification & Track Record ───────────────────────
+export function getWorkHistory(userId) {
+  return request(`/verify/track-record/${userId}`);
+}
+
+export function uploadWorkEvidence(userId, trade, claimedLevel, workDescription, file) {
+  const formData = new FormData();
+  formData.append('user_id', userId);
+  formData.append('trade', trade);
+  formData.append('claimed_level', claimedLevel);
+  formData.append('work_description', workDescription);
+  formData.append('file', file);
+
+  return fetch(`${API_BASE}/verify/upload-work`, {
+    method: 'POST',
+    body: formData,
+  }).then(async res => {
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail?.message || body.detail || `API error ${res.status}`);
+    }
+    return res.json();
+  });
+}
+
+export function verifySkillLive(userId, gigId, requiredSkill, frames) {
+  return request('/verify-skill-live', {
+    method: 'POST',
+    body: JSON.stringify({
+      user_id: userId,
+      gig_id: gigId,
+      required_skill: requiredSkill,
+      frames,
+    }),
+  });
+}
+
 // ─── BazaarPulse ───────────────────────────────────────
 export function updateInventory(vendorId, products) {
   return request('/inventory/update', {

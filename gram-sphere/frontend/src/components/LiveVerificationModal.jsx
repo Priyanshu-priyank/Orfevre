@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, ShieldCheck, Camera, Loader2, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { verifySkillLive } from '../api';
 
 /**
  * LiveVerificationModal
@@ -16,7 +17,7 @@ import { X, ShieldCheck, Camera, Loader2, CheckCircle, XCircle, AlertCircle } fr
 
 const RECORDING_SECONDS = 10;
 
-const LiveVerificationModal = ({ gig, onClose, onSuccess }) => {
+const LiveVerificationModal = ({ gig, userId, onClose, onSuccess }) => {
   const [step, setStep] = useState('intro'); // intro | camera | recording | processing | passed | failed
   const [countdown, setCountdown] = useState(RECORDING_SECONDS);
   const [stream, setStream] = useState(null);
@@ -98,33 +99,27 @@ const LiveVerificationModal = ({ gig, onClose, onSuccess }) => {
     }, 1000);
   };
 
-  const runVerification = (frames) => {
+  const runVerification = async (frames) => {
     setStep('processing');
-
-    /**
-     * BACKEND TODO: Replace this setTimeout mock with a real API call:
-     *   POST /api/verify-skill-live
-     *   Body: {
-     *     userId: CURRENT_USER_ID,
-     *     gigId: gig.id,
-     *     requiredSkill: gig.title,
-     *     frames: frames  (array of base64 JPEG strings)
-     *   }
-     *   Returns: { verified: true/false, confidence: 0.0-1.0, reason: "..." }
-     */
-    setTimeout(() => {
-      // Mock: 80% pass rate for demo
-      const passed = Math.random() > 0.2;
+    try {
+      if (!userId) {
+        throw new Error('Missing user ID. Please sign in again.');
+      }
+      if (!frames.length) {
+        throw new Error('No frames captured. Please retry.');
+      }
+      const result = await verifySkillLive(userId, gig.id, gig.title, frames);
+      setVerificationResult(result);
+      setStep(result.verified ? 'passed' : 'failed');
+      if (result.verified && onSuccess) onSuccess(gig);
+    } catch (e) {
       setVerificationResult({
-        verified: passed,
-        confidence: passed ? (0.75 + Math.random() * 0.24).toFixed(2) : (0.2 + Math.random() * 0.3).toFixed(2),
-        reason: passed
-          ? `Live demonstration matches required skill: ${gig.title}.`
-          : `Could not clearly identify ${gig.title} activity in the video. Please retry in better lighting.`
+        verified: false,
+        confidence: 0,
+        reason: e.message || 'Live verification failed. Please try again.',
       });
-      setStep(passed ? 'passed' : 'failed');
-      if (passed && onSuccess) onSuccess(gig);
-    }, 4000);
+      setStep('failed');
+    }
   };
 
   const handleClose = () => {

@@ -1,11 +1,30 @@
 import os
+from pathlib import Path
 import firebase_admin
 from firebase_admin import credentials, firestore
 from dotenv import load_dotenv
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
-load_dotenv()
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+ENV_PATH = PROJECT_ROOT / ".env"
+load_dotenv(dotenv_path=ENV_PATH, override=True)
+
+
+def _clean_env_value(value: str | None) -> str | None:
+    if not value:
+        return None
+    return value.strip().strip('"').strip("'")
+
+
+def _resolve_env_path(value: str | None) -> str | None:
+    cleaned = _clean_env_value(value)
+    if not cleaned:
+        return None
+    path = Path(cleaned)
+    if not path.is_absolute():
+        path = (PROJECT_ROOT / path).resolve()
+    return str(path)
 
 def get_pg_connection():
     """
@@ -18,8 +37,10 @@ def get_pg_connection():
     )
 
 if not firebase_admin._apps:
-    cert_path = os.getenv("FIREBASE_SERVICE_ACCOUNT_PATH")
-    
+    cert_path = _resolve_env_path(
+        os.getenv("FIREBASE_SERVICE_ACCOUNT_PATH") or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    )
+
     if cert_path and os.path.exists(cert_path):
         # We always initialize with the certificate if found.
         # If FIRESTORE_EMULATOR_HOST is set in .env, traffic will 

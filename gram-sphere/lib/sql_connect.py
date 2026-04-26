@@ -1,17 +1,36 @@
 import os
+from pathlib import Path
 import sqlalchemy
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
 
-load_dotenv()
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+ENV_PATH = PROJECT_ROOT / ".env"
+load_dotenv(dotenv_path=ENV_PATH, override=True)
+
+
+def _clean_env_value(value: str | None) -> str | None:
+    if not value:
+        return None
+    return value.strip().strip('"').strip("'")
+
+
+def _resolve_env_path(value: str | None) -> str | None:
+    cleaned = _clean_env_value(value)
+    if not cleaned:
+        return None
+    path = Path(cleaned)
+    if not path.is_absolute():
+        path = (PROJECT_ROOT / path).resolve()
+    return str(path)
 
 # Configuration
-INSTANCE_CONNECTION_NAME = os.getenv("INSTANCE_CONNECTION_NAME")  # e.g. "project:region:instance"
-DB_USER = os.getenv("DB_USER", "postgres")
-DB_PASS = os.getenv("DB_PASS")
-DB_NAME = os.getenv("DB_NAME", "gramsphere")
-DB_URL = os.getenv("DATABASE_URL")
+INSTANCE_CONNECTION_NAME = _clean_env_value(os.getenv("INSTANCE_CONNECTION_NAME"))  # e.g. "project:region:instance"
+DB_USER = _clean_env_value(os.getenv("DB_USER")) or "postgres"
+DB_PASS = _clean_env_value(os.getenv("DB_PASS"))
+DB_NAME = _clean_env_value(os.getenv("DB_NAME")) or "gramsphere"
+DB_URL = _clean_env_value(os.getenv("DATABASE_URL"))
 
 
 def _build_engine():
@@ -26,7 +45,7 @@ def _build_engine():
         from google.oauth2 import service_account
         import pg8000  # noqa: F811
 
-        sa_path = os.getenv("FIREBASE_SERVICE_ACCOUNT_PATH")
+        sa_path = _resolve_env_path(os.getenv("FIREBASE_SERVICE_ACCOUNT_PATH"))
         credentials = None
         if sa_path and os.path.exists(sa_path):
             credentials = service_account.Credentials.from_service_account_file(sa_path)

@@ -83,6 +83,18 @@ const YouthHome = () => {
     getGigs()
       .then((data) => {
         const fetchedGigs = data.gigs || [];
+        if (fetchedGigs.length === 0) {
+          // Fallback dummy data
+          const dummyGigs = [
+            { id: '1', title: 'Weaver', status: 'open', budget: '1200', tokensReward: 2, trade: 'Weaving' },
+            { id: '2', title: 'Potter', status: 'open', budget: '800', tokensReward: 1, trade: 'Pottery' },
+            { id: '3', title: 'Carpenter', status: 'open', budget: '1500', tokensReward: 3, trade: 'Carpentry' },
+            { id: '4', title: 'Blacksmith', status: 'open', budget: '2000', tokensReward: 5, trade: 'Metalwork' },
+            { id: '5', title: 'Farmer', status: 'open', budget: '600', tokensReward: 1, trade: 'Agriculture' },
+          ];
+          setGigs(dummyGigs);
+          return;
+        }
         setGigs(fetchedGigs);
 
         if (fetchedGigs.length > 0) {
@@ -100,7 +112,18 @@ const YouthHome = () => {
           setCategories(built.length > 0 ? built : defaultCategories);
         }
       })
-      .catch(console.error)
+      .catch((err) => {
+        console.error(err);
+        // Fallback dummy data on error
+        const dummyGigs = [
+          { id: '1', title: 'Weaver', status: 'open', budget: '1200', tokensReward: 2, trade: 'Weaving' },
+          { id: '2', title: 'Potter', status: 'open', budget: '800', tokensReward: 1, trade: 'Pottery' },
+          { id: '3', title: 'Carpenter', status: 'open', budget: '1500', tokensReward: 3, trade: 'Carpentry' },
+          { id: '4', title: 'Blacksmith', status: 'open', budget: '2000', tokensReward: 5, trade: 'Metalwork' },
+          { id: '5', title: 'Farmer', status: 'open', budget: '600', tokensReward: 1, trade: 'Agriculture' },
+        ];
+        setGigs(dummyGigs);
+      })
       .finally(() => setLoading(false));
   }, [user]);
 
@@ -141,6 +164,7 @@ const YouthHome = () => {
         {applyingGig && (
           <LiveVerificationModal
             gig={applyingGig}
+            userId={user?.id}
             onClose={() => setApplyingGig(null)}
             onSuccess={handleApplySuccess}
           />
@@ -189,6 +213,7 @@ const YouthHome = () => {
       {applyingGig && (
         <LiveVerificationModal
           gig={applyingGig}
+          userId={user?.id}
           onClose={() => setApplyingGig(null)}
           onSuccess={handleApplySuccess}
         />

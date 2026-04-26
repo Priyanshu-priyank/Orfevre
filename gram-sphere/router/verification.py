@@ -9,7 +9,8 @@ from lib.geo_validator import (
 )
 from lib.gemini import call_gemini
 from datetime import datetime
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import uuid
 import os
 import tempfile
@@ -136,15 +137,16 @@ async def upload_work_evidence(
 
     # Hard block: if GPS exists but is clearly outside Karnataka
     # If no GPS at all → soft warning, don't block (some devices strip EXIF)
-    if gps_coords and not geo_result["valid"]:
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "error":   "location_mismatch",
-                "message": geo_result["message"],
-                "details": geo_result
-            }
-        )
+    # [MODIFIED: Ignoring geolocation data per user request]
+    # if gps_coords and not geo_result["valid"]:
+    #     raise HTTPException(
+    #         status_code=422,
+    #         detail={
+    #             "error":   "location_mismatch",
+    #             "message": geo_result["message"],
+    #             "details": geo_result
+    #         }
+    #     )
 
     gps_warning = None
     if not gps_coords:
@@ -253,10 +255,11 @@ async def get_track_record(user_id: str):
     entries_ref = (
         db.collection("work_entries")
           .where("userId", "==", user_id)
-          .order_by("submittedAt", direction="DESCENDING")
           .stream()
     )
     entries = [e.to_dict() for e in entries_ref]
+    # Sort in memory to avoid missing composite index error
+    entries.sort(key=lambda x: str(x.get("submittedAt", "")), reverse=True)
 
     cert_ref  = db.collection("certificates").document(user_id)
     cert_snap = cert_ref.get()
@@ -301,13 +304,14 @@ async def get_certificate(user_id: str):
     cert = cert_snap.to_dict()
 
     # Also return the 3 most recent verified entries as proof
-    entries = list(
+    entries_ref = (
         db.collection("work_entries")
           .where("userId", "==", user_id)
-          .order_by("submittedAt", direction="DESCENDING")
-          .limit(3)
           .stream()
     )
+    all_entries = [e.to_dict() for e in entries_ref]
+    all_entries.sort(key=lambda x: str(x.get("submittedAt", "")), reverse=True)
+    entries = all_entries[:3]
 
     return {
         **cert,
@@ -373,21 +377,22 @@ async def _run_gemini_assessment(
     or skill level inconsistency.
     """
 
-    model = genai.GenerativeModel(
-        model_name="gemini-pro-latest",
-        generation_config=genai.GenerationConfig(
-            response_mime_type="application/json",
-            temperature=0.2
-        )
-    )
+    client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
     try:
         if is_image:
-            image_part = {
-                "mime_type": "image/jpeg",
-                "data":      base64.b64encode(file_bytes).decode("utf-8")
-            }
-            response = model.generate_content([prompt, image_part])
+            image_part = types.Part.from_bytes(
+                data=file_bytes,
+                mime_type="image/jpeg"
+            )
+            response = client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=[prompt, image_part],
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    temperature=0.2
+                )
+            )
 
         else:
             # Video: extract 6 frames using ffprobe + ffmpeg
@@ -404,10 +409,17 @@ async def _run_gemini_assessment(
 
             # Send all frames together in a single Gemini call
             parts = [prompt] + [
-                {"mime_type": "image/jpeg", "data": base64.b64encode(f).decode()}
+                types.Part.from_bytes(data=f, mime_type="image/jpeg")
                 for f in frames
             ]
-            response = model.generate_content(parts)
+            response = client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=parts,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    temperature=0.2
+                )
+            )
 
         text = response.text.strip()
         if text.startswith("```"):
