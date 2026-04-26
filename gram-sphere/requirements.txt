@@ -5,7 +5,8 @@ firebase-admin
 google-generativeai
 python-dotenv
 cachetools
-python-multipartgunicorn
+python-multipart
+gunicorn
 uvicorn
 pytest
 pytest-asyncio

@@ -115,3 +115,11 @@ export function getClusterStats(district) {
 export function getGigs() {
   return request('/gigs');
 }
+
+// ─── Chatbot ───────────────────────────────────────────
+export function sendChatMessage(message, language = 'en') {
+  return request('/chatbot', {
+    method: 'POST',
+    body: JSON.stringify({ message, language }),
+  });
+}

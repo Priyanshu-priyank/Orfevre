@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Smartphone } from 'lucide-react';
+import ChatbotWidget from '../components/ChatbotWidget';
 
 const LandingPage = ({ onLogin }) => {
   const [scrollState, setScrollState] = useState(0);
@@ -328,6 +329,8 @@ const LandingPage = ({ onLogin }) => {
         </div>
       </footer>
 
+      {/* Navigation Chatbot Assistant */}
+      <ChatbotWidget />
     </div>
   );
 };
