@@ -1,126 +1,160 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
-from typing import Optional
-from lib.firestore import db
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
+from typing import Optional, List
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from lib.sql_connect import get_sql_session
 from lib.geo_validator import (
     extract_gps_from_image,
     extract_gps_from_video,
-    validate_location,
-    reverse_geocode
+    validate_location
 )
 from lib.gemini import call_gemini
 from datetime import datetime
-from google import genai
-from google.genai import types
+import google.generativeai as genai
 import uuid
 import os
 import tempfile
-import base64
 import json
+import subprocess
 
-router = APIRouter()
-
-
-# ── TIER THRESHOLDS ──────────────────────────────────────────────────
-# How many verified work entries are needed per tier.
-# Combined with AI portfolio score from Layer 1.
-
-TIER_RULES = {
-    "master": {
-        "min_entries":        10,
-        "min_ai_score":        75,
-        "min_avg_gig_rating":  4.2,
-        "description":         "Market Proven Artisan"
-    },
-    "gold": {
-        "min_entries":        5,
-        "min_ai_score":       60,
-        "min_avg_gig_rating": 0,    # gig ratings not required for gold
-        "description":        "Track Record Verified Artisan"
-    },
-    "silver": {
-        "min_entries":        2,
-        "min_ai_score":       40,
-        "min_avg_gig_rating": 0,
-        "description":        "Portfolio Verified Artisan"
-    },
-    "bronze": {
-        "min_entries":        0,
-        "min_ai_score":       0,
-        "min_avg_gig_rating": 0,
-        "description":        "Declared Artisan"
-    }
-}
+router = APIRouter(prefix="/verify", tags=["Verification Pipeline"])
 
 IMAGE_TYPES = {"image/jpeg", "image/jpg", "image/png", "image/heic", "image/webp"}
 VIDEO_TYPES = {"video/mp4", "video/quicktime", "video/x-msvideo", "video/3gpp"}
 
+# Predefined skills per trade (sorted by difficulty)
+TRADE_SKILLS = {
+    "carpenter": [
+        {"id": "carp_1", "title": "Sand and finish a rough plank", "difficulty": "beginner"},
+        {"id": "carp_2", "title": "Basic joinery (Half-lap joint)", "difficulty": "beginner"},
+        {"id": "carp_3", "title": "Cut and fit a butt joint", "difficulty": "intermediate"},
+        {"id": "carp_4", "title": "Router edge profiling", "difficulty": "intermediate"},
+        {"id": "carp_5", "title": "Hand-cut a mortise and tenon joint", "difficulty": "advanced"},
+        {"id": "carp_6", "title": "Table leg turning (Lathe work)", "difficulty": "advanced"},
+        {"id": "carp_7", "title": "Intricate wood carving (Floral motif)", "difficulty": "master"}
+    ]
+}
 
-# ── POST /verify/upload-work ─────────────────────────────────────────
+# ── 1. WORK EVIDENCE PIPELINE ────────────────────────────────────────
 
-@router.post("/verify/upload-work")
+@router.post("/upload-work")
 async def upload_work_evidence(
-    user_id:         str        = Form(...),
-    trade:           str        = Form(...),
-    claimed_level:   str        = Form(...),  # beginner|intermediate|advanced|master
-    work_description:str        = Form(...),  # "Built a wardrobe for a client in Mandya"
-    file:            UploadFile = File(...)
+    user_id: str = Form(...),
+    work_description: str = Form(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_sql_session)
 ):
     """
-    Main verification endpoint. Accepts a photo or video of completed work.
-
-    Pipeline:
-      1. Validate file type and size
-      2. Extract GPS metadata from file
-      3. Validate GPS against user's registered city (within 100km)
-      4. Run Gemini Vision AI assessment on the work
-      5. Write a verified work entry to the track record
-      6. Recalculate certificate tier
-      7. Return full result
+    Pipeline 1: Validates if the uploaded image matches the user's registered job.
     """
-
-    # ── 1. File validation ───────────────────────────────────────────
+    # 1. Get user's job and registered city
+    user = db.execute(text("SELECT full_name, role, current_district, cert_tier FROM users WHERE id = :id"), {"id": user_id}).fetchone()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Get user's primary skill/trade
+    skill_row = db.execute(text("SELECT skill_type, proficiency_level FROM user_skills WHERE user_id = :id AND is_primary_skill = TRUE"), {"id": user_id}).fetchone()
+    trade = skill_row.skill_type.lower() if skill_row else "artisan"
+    
+    if trade != "carpenter":
+        raise HTTPException(status_code=400, detail="Currently, the verification pipeline only supports the 'carpenter' trade.")
+    
+    # 2. File validation
     content_type = file.content_type or ""
-    is_image     = content_type in IMAGE_TYPES
-    is_video     = content_type in VIDEO_TYPES
-
-    if not is_image and not is_video:
-        raise HTTPException(
-            status_code=415,
-            detail=f"Unsupported file type: {content_type}. "
-                   f"Accepted: JPEG, PNG, MP4, MOV, AVI."
-        )
-
+    is_image = content_type in IMAGE_TYPES
     file_bytes = await file.read()
-    file_size_mb = len(file_bytes) / (1024 * 1024)
+    
+    # 3. Geo validation
+    gps_coords = extract_gps_from_image(file_bytes) if is_image else None
+    registered_city = user.current_district + ", Karnataka"
+    geo_result = validate_location(gps_coords, registered_city)
+    
+    if gps_coords and not geo_result["valid"]:
+        return {"success": False, "error": "Location mismatch", "details": geo_result}
 
-    max_mb = 15 if is_image else 200
-    if file_size_mb > max_mb:
-        raise HTTPException(
-            status_code=413,
-            detail=f"File too large: {file_size_mb:.1f}MB. Max: {max_mb}MB."
-        )
+    # 4. Gemini AI Assessment
+    prompt = f"""
+    You are a master carpenter. Analyze this image of woodworking.
+    Does the content of the picture match the tools, materials, and output of a professional carpenter?
+    Look for: wood textures, sawdust, joinery, woodworking tools (saws, chisels, planes), or finished furniture.
+    
+    Return ONLY JSON: 
+    {{
+      "match": "yes" | "no", 
+      "confidence_score": 0-100, 
+      "reason": "Explain why it matches or why it looks like a different trade/fake."
+    }}
+    """
+    ai_result = await call_gemini(prompt, [file_bytes])
+    
+    # 5. Push to Database (skill_media)
+    media_id = str(uuid.uuid4())
+    db.execute(text("""
+        INSERT INTO skill_media (id, user_id, file_url, file_type, geo_verified, geo_distance_km, ai_overall_score, work_description, status)
+        VALUES (:id, :u_id, :url, 'image', :geo, :dist, :score, :desc, :status)
+    """), {
+        "id": media_id,
+        "u_id": user_id,
+        "url": f"https://storage.googleapis.com/gramsphere-work/{media_id}.jpg",
+        "geo": geo_result["valid"],
+        "dist": geo_result.get("distance_km"),
+        "score": ai_result.get("confidence_score", 0),
+        "desc": work_description,
+        "status": "verified" if ai_result.get("match") == "yes" and ai_result.get("confidence_score", 0) > 70 else "pending"
+    })
+    db.commit()
+    
+    return {
+        "success": True,
+        "ai_match": ai_result.get("match"),
+        "confidence_score": ai_result.get("confidence_score"),
+        "geo_verified": geo_result["valid"],
+        "media_id": media_id
+    }
 
-    # ── 2. Fetch user's registered city ─────────────────────────────
-    user_ref  = db.collection("users").document(user_id)
-    user_snap = user_ref.get()
+# ── 2. SKILL BADGE PIPELINE ──────────────────────────────────────────
 
-    if not user_snap.exists:
-        raise HTTPException(status_code=404, detail="User not found.")
+@router.get("/skills/{trade}")
+async def get_trade_skills(trade: str):
+    """Returns predefined list of skills for a trade."""
+    return TRADE_SKILLS.get(trade.lower(), [])
 
-    user_data        = user_snap.to_dict()
-    registered_city  = user_data.get("district", "") + ", Karnataka"
-    # e.g. "Mysuru, Karnataka" — district is what we store on signup
+@router.post("/upload-skill-task")
+async def upload_skill_task(
+    user_id: str = Form(...),
+    skill_id: str = Form(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_sql_session)
+):
+    """
+    Pipeline 2: Validates if the uploaded content matches a specific skill task.
+    """
+    # 1. Find skill definition
+    skill_def = None
+    for trade, skills in TRADE_SKILLS.items():
+        for s in skills:
+            if s["id"] == skill_id:
+                skill_def = s
+                break
+    
+    if not skill_def:
+        raise HTTPException(status_code=404, detail="Skill definition not found")
 
-    # ── 3. Extract GPS from file ─────────────────────────────────────
+    # 2. Fetch user and city
+    user = db.execute(text("SELECT current_district FROM users WHERE id = :id"), {"id": user_id}).fetchone()
+    registered_city = user.current_district + ", Karnataka"
+
+    # 3. File and Geo validation
+    file_bytes = await file.read()
+    content_type = file.content_type or ""
+    is_image = content_type in IMAGE_TYPES
+    is_video = content_type in VIDEO_TYPES
+    
     gps_coords = None
-
     if is_image:
         gps_coords = extract_gps_from_image(file_bytes)
-
     elif is_video:
-        # Write video to a temp file for ffprobe
-        suffix = "." + (file.filename or "video.mp4").rsplit(".", 1)[-1]
-        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
             tmp.write(file_bytes)
             tmp_path = tmp.name
         try:
@@ -137,16 +171,15 @@ async def upload_work_evidence(
 
     # Hard block: if GPS exists but is clearly outside Karnataka
     # If no GPS at all → soft warning, don't block (some devices strip EXIF)
-    # [MODIFIED: Ignoring geolocation data per user request]
-    # if gps_coords and not geo_result["valid"]:
-    #     raise HTTPException(
-    #         status_code=422,
-    #         detail={
-    #             "error":   "location_mismatch",
-    #             "message": geo_result["message"],
-    #             "details": geo_result
-    #         }
-    #     )
+    if gps_coords and not geo_result["valid"]:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error":   "location_mismatch",
+                "message": geo_result["message"],
+                "details": geo_result
+            }
+        )
 
     gps_warning = None
     if not gps_coords:
@@ -255,11 +288,10 @@ async def get_track_record(user_id: str):
     entries_ref = (
         db.collection("work_entries")
           .where("userId", "==", user_id)
+          .order_by("submittedAt", direction="DESCENDING")
           .stream()
     )
     entries = [e.to_dict() for e in entries_ref]
-    # Sort in memory to avoid missing composite index error
-    entries.sort(key=lambda x: str(x.get("submittedAt", "")), reverse=True)
 
     cert_ref  = db.collection("certificates").document(user_id)
     cert_snap = cert_ref.get()
@@ -304,14 +336,13 @@ async def get_certificate(user_id: str):
     cert = cert_snap.to_dict()
 
     # Also return the 3 most recent verified entries as proof
-    entries_ref = (
+    entries = list(
         db.collection("work_entries")
           .where("userId", "==", user_id)
+          .order_by("submittedAt", direction="DESCENDING")
+          .limit(3)
           .stream()
     )
-    all_entries = [e.to_dict() for e in entries_ref]
-    all_entries.sort(key=lambda x: str(x.get("submittedAt", "")), reverse=True)
-    entries = all_entries[:3]
 
     return {
         **cert,
@@ -346,13 +377,10 @@ async def _run_gemini_assessment(
     """
 
     prompt = f"""
-    You are a master {trade} and quality assessor with 30 years of experience
-    in traditional Indian woodworking and craftsmanship.
-
-    Analyse this {'image' if is_image else 'set of video frames'} of {trade}
-    work submitted by someone claiming to be a {claimed_level}-level {trade}.
-
-    Evaluate the following and return ONLY valid JSON:
+    You are a technical woodworking instructor. Analyze this {'image' if is_image else 'video'} 
+    to see if it shows the user correctly performing the following carpenter skill: '{skill_def['title']}'.
+    
+    Return ONLY JSON: 
     {{
       "joint_quality":      {{ "score": 0, "observation": "string" }},
       "surface_finishing":  {{ "score": 0, "observation": "string" }},
@@ -377,22 +405,21 @@ async def _run_gemini_assessment(
     or skill level inconsistency.
     """
 
-    client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+    model = genai.GenerativeModel(
+        model_name="gemini-pro-latest",
+        generation_config=genai.GenerationConfig(
+            response_mime_type="application/json",
+            temperature=0.2
+        )
+    )
 
     try:
         if is_image:
-            image_part = types.Part.from_bytes(
-                data=file_bytes,
-                mime_type="image/jpeg"
-            )
-            response = client.models.generate_content(
-                model="gemini-2.0-flash",
-                contents=[prompt, image_part],
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    temperature=0.2
-                )
-            )
+            image_part = {
+                "mime_type": "image/jpeg",
+                "data":      base64.b64encode(file_bytes).decode("utf-8")
+            }
+            response = model.generate_content([prompt, image_part])
 
         else:
             # Video: extract 6 frames using ffprobe + ffmpeg
@@ -409,17 +436,10 @@ async def _run_gemini_assessment(
 
             # Send all frames together in a single Gemini call
             parts = [prompt] + [
-                types.Part.from_bytes(data=f, mime_type="image/jpeg")
+                {"mime_type": "image/jpeg", "data": base64.b64encode(f).decode()}
                 for f in frames
             ]
-            response = client.models.generate_content(
-                model="gemini-2.0-flash",
-                contents=parts,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    temperature=0.2
-                )
-            )
+            response = model.generate_content(parts)
 
         text = response.text.strip()
         if text.startswith("```"):
@@ -631,6 +651,11 @@ def _next_tier_info(
         gaps.append(f"Achieve a gig rating of {next_rules['min_avg_gig_rating']}+ from clients")
 
     return {
-        "tier":  next_tier,
-        "gaps":  gaps if gaps else ["All requirements met — tier upgrade processing"]
+        "user_id": user_id,
+        "final_trust_score": round(final_score, 1),
+        "breakdown": {
+            "portfolio_verified": round(portfolio_component, 1),
+            "badges": round(badge_component, 1),
+            "experience_and_rating": round(exp_component, 1)
+        }
     }
