@@ -13,35 +13,10 @@ const MyGigs = () => {
     getMyApplications(user.id)
       .then(data => {
         const apps = data.applications || [];
-        if (apps.length === 0) {
-          setApplications([
-            {
-              id: 'app1',
-              status: 'pending',
-              applied_at: new Date().toISOString(),
-              gig: { title: 'Master Weaver', tokensReward: 3 }
-            },
-            {
-              id: 'app2',
-              status: 'accepted',
-              applied_at: new Date(Date.now() - 86400000).toISOString(),
-              gig: { title: 'Pottery Apprentice', tokensReward: 1 }
-            }
-          ]);
-          return;
-        }
         setApplications(apps);
       })
       .catch(err => {
         console.error(err);
-        setApplications([
-          {
-            id: 'app1',
-            status: 'pending',
-            applied_at: new Date().toISOString(),
-            gig: { title: 'Master Weaver', tokensReward: 3 }
-          }
-        ]);
       })
       .finally(() => setLoading(false));
   }, [user.id]);

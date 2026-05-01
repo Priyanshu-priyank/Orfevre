@@ -20,6 +20,7 @@ class UserUpdateRequest(BaseModel):
     trade:    Optional[str] = None
     district: Optional[str] = None
     location: Optional[str] = None
+    bio:      Optional[str] = None
 
 class GoogleAuthRequest(BaseModel):
     credential: str
@@ -160,15 +161,39 @@ async def get_user(user_id: str):
 async def update_user(user_id: str, body: UserUpdateRequest):
     """Update editable fields on a user document."""
     ref = db.collection("users").document(user_id)
-    if not ref.get().exists:
-        raise HTTPException(status_code=404, detail="User not found")
-
+    snap = ref.get()
+    
     updates = {k: v for k, v in body.dict().items() if v is not None}
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
 
+    if not snap.exists:
+        if user_id == "demo_user":
+            # Automatically create demo_user if missing in Firestore
+            base_user = {
+                "name": "Priyanshu",
+                "trade": "General",
+                "district": "Hubli",
+                "trustScore": 85,
+                "skillTokens": 4,
+                "networkSize": 12,
+                "bio": "Ready to work."
+            }
+            base_user.update(updates)
+            ref.set(base_user)
+            base_user["id"] = user_id
+            return base_user
+        else:
+            raise HTTPException(status_code=404, detail="User not found")
+
     ref.update(updates)
-    return {"success": True, "updated": updates}
+    
+    # Return the full updated user object
+    updated_snap = ref.get()
+    user_data = updated_snap.to_dict()
+    user_data["id"] = updated_snap.id
+    user_data["trustScore"] = compute_trust_score(user_id)
+    return user_data
 
 
 # -- GET /gigs -------------------------------------------------------------

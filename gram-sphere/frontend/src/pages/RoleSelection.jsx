@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Briefcase, Store, BarChart2, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
+import { setRole } from '../api';
+
 const RoleSelection = () => {
   const { user, updateRole, token } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -11,15 +13,7 @@ const RoleSelection = () => {
     setIsSubmitting(true);
     setError(null);
     try {
-      const res = await fetch(`http://localhost:8000/api/auth/set-role?user_id=${user.id}`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ role })
-      });
-      
-      const data = await res.json();
+      const data = await setRole(user.id, role);
       if (data.success) {
         updateRole(role, data.token);
       } else {

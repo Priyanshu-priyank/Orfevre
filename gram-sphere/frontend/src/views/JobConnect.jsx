@@ -49,32 +49,6 @@ const JobConnect = () => {
     getGigs()
       .then((data) => {
         const fetchedGigs = data.gigs || [];
-        if (fetchedGigs.length === 0) {
-          // Fallback dummy data
-          const dummyGigs = [
-            { id: '1', title: 'Weaver', status: 'open', budget: '1200', tokensReward: 2, vendorId: 'Hubli Handlooms' },
-            { id: '2', title: 'Potter', status: 'open', budget: '800', tokensReward: 1, vendorId: 'Dharwad Pottery' },
-            { id: '3', title: 'Carpenter', status: 'open', budget: '1500', tokensReward: 3, vendorId: 'Shakti Woodworks' },
-            { id: '4', title: 'Blacksmith', status: 'open', budget: '2000', tokensReward: 5, vendorId: 'Rural Iron Smiths' },
-            { id: '5', title: 'Farmer', status: 'open', budget: '600', tokensReward: 1, vendorId: 'Green Acres Co-op' },
-          ];
-          setGigs(dummyGigs);
-          
-          const tradeCounts = {};
-          dummyGigs.forEach((g) => {
-            const trade = g.title || 'Other';
-            tradeCounts[trade] = (tradeCounts[trade] || 0) + 1;
-          });
-          const built = Object.entries(tradeCounts).map(([title, count]) => ({
-            id: title.toLowerCase().replace(/\s+/g, '-'),
-            title,
-            openings: count,
-            icon: TRADE_ICONS[title] || '💼',
-          }));
-          const allCategory = { id: 'all', title: 'All Jobs', openings: dummyGigs.length, icon: '📋' };
-          setCategories([allCategory, ...built]);
-          return;
-        }
         setGigs(fetchedGigs);
 
         // Build categories from the fetched gigs
@@ -106,13 +80,6 @@ const JobConnect = () => {
       })
       .catch((err) => {
         console.error('Failed to load gigs:', err);
-        // Fallback dummy data on error
-        const dummyGigs = [
-          { id: '1', title: 'Weaver', status: 'open', budget: '1200', tokensReward: 2, vendorId: 'Hubli Handlooms' },
-          { id: '2', title: 'Potter', status: 'open', budget: '800', tokensReward: 1, vendorId: 'Dharwad Pottery' },
-        ];
-        setGigs(dummyGigs);
-        setCategories(defaultCategories);
         setError(err.message);
       })
       .finally(() => setLoading(false));

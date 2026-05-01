@@ -12,11 +12,13 @@ const Profile = () => {
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [applyingGig, setApplyingGig] = useState(null);
+  const [showAppsModal, setShowAppsModal] = useState(false);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [editForm, setEditForm] = useState({});
   
   // Work History Feed & Upload State
   const [workHistory, setWorkHistory] = useState([]);
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const [showAppsModal, setShowAppsModal] = useState(false);
   const [uploadFile, setUploadFile] = useState(null);
   const [workDescription, setWorkDescription] = useState('');
   const [isUploading, setIsUploading] = useState(false);
@@ -26,91 +28,13 @@ const Profile = () => {
     
     // Fetch user details
     if (user?.id) {
-      getUser(user.id)
-        .then(setUserData)
-        .catch(() => {
-          setUserData({
-            name: user.name || 'Priyanshu',
-            trade: 'Master Weaver',
-            district: 'Hubli',
-            trustScore: 85,
-            skillTokens: 4,
-            networkSize: 12,
-            certTier: 'silver',
-            bio: 'Expert in traditional weaving with 5 years of experience. Looking for local gigs.'
-          });
-        });
-
-      getMyApplications(user.id)
-        .then(data => {
-          const apps = data.applications || [];
-          if (apps.length === 0) {
-            setApplications([
-              { id: 'app1', status: 'pending', applied_at: new Date().toISOString(), gig: { title: 'Master Weaver', budget: '1200' } },
-              { id: 'app2', status: 'accepted', applied_at: new Date(Date.now() - 86400000).toISOString(), gig: { title: 'Pottery Apprentice', budget: '800' } }
-            ]);
-          } else {
-            setApplications(apps);
-          }
-        })
-        .catch(() => {
-          setApplications([
-            { id: 'app1', status: 'pending', applied_at: new Date().toISOString(), gig: { title: 'Master Weaver', budget: '1200' } }
-          ]);
-        });
-
-      getWorkHistory(user.id)
-        .then(data => {
-          const history = data.entries || [];
-          if (history.length === 0) {
-            setWorkHistory([
-              {
-                entryId: 'w1',
-                submittedAt: new Date().toISOString(),
-                aiScore: 92,
-                aiComplexity: 'Advanced',
-                trade: 'Weaving',
-                workDescription: 'Completed a set of 5 traditional sarees for a local wedding.'
-              }
-            ]);
-          } else {
-            setWorkHistory(history);
-          }
-        })
-        .catch(() => {
-          setWorkHistory([
-            {
-              entryId: 'w1',
-              submittedAt: new Date().toISOString(),
-              aiScore: 92,
-              aiComplexity: 'Advanced',
-              trade: 'Weaving',
-              workDescription: 'Completed a set of 5 traditional sarees for a local wedding.'
-            }
-          ]);
-        });
+      getUser(user.id).then(setUserData).catch(console.error);
+      getMyApplications(user.id).then(data => setApplications(data.applications || [])).catch(console.error);
+      getWorkHistory(user.id).then(data => setWorkHistory(data.entries || [])).catch(console.error);
     }
     
     // Fetch gigs for recommendations
-    getGigs()
-      .then(data => {
-        const fetchedGigs = data.gigs || [];
-        if (fetchedGigs.length === 0) {
-          setGigs([
-            { id: '1', title: 'Weaver', status: 'open', budget: '1200', vendorId: 'Vendor A' },
-            { id: '2', title: 'Potter', status: 'open', budget: '800', vendorId: 'Vendor B' }
-          ]);
-        } else {
-          setGigs(fetchedGigs);
-        }
-      })
-      .catch(() => {
-        setGigs([
-          { id: '1', title: 'Weaver', status: 'open', budget: '1200', vendorId: 'Vendor A' },
-          { id: '2', title: 'Potter', status: 'open', budget: '800', vendorId: 'Vendor B' }
-        ]);
-      })
-      .finally(() => setLoading(false));
+    getGigs().then(data => setGigs(data.gigs || [])).catch(console.error).finally(() => setLoading(false));
   }, [user]);
 
   // Derived state
@@ -225,10 +149,10 @@ const Profile = () => {
             <button onClick={() => setShowAppsModal(true)} className="px-4 py-2 rounded-full border border-gray-200 text-sm font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 shadow-sm">
               <span className="bg-gray-100 px-1.5 py-0.5 rounded text-xs">{applications.length}</span> Applications
             </button>
-            <button className="px-4 py-2 rounded-full border border-gray-200 text-sm font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 shadow-sm">
+            <button onClick={() => { setEditForm(userData || {}); setIsEditingProfile(true); }} className="px-4 py-2 rounded-full border border-gray-200 text-sm font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 shadow-sm">
               ✏️ Edit
             </button>
-            <button className="px-4 py-2 rounded-full bg-[#1b4332] text-sm font-bold text-white hover:bg-[#153426] flex items-center gap-1.5 shadow-sm">
+            <button onClick={() => { navigator.clipboard.writeText(window.location.href); alert("Profile link copied to clipboard! (Wait for WhatsApp integration soon)"); }} className="px-4 py-2 rounded-full bg-[#1b4332] text-sm font-bold text-white hover:bg-[#153426] flex items-center gap-1.5 shadow-sm">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
               Share
             </button>
@@ -398,9 +322,13 @@ const Profile = () => {
                        </div>
                      </div>
                      
-                     {/* Image Placeholder (Backend stores fileRef, but we just show placeholder for now, or object url if we had one) */}
-                     <div className="w-full h-64 bg-gray-100 flex items-center justify-center text-gray-400 border-y border-gray-50">
-                       <span className="text-5xl">📸</span>
+                     {/* Post Image */}
+                     <div className="w-full h-64 bg-gray-100 border-y border-gray-50 overflow-hidden relative">
+                       {entry.file_url ? (
+                         <img src={entry.file_url} alt="Proof of Work" className="w-full h-full object-cover" />
+                       ) : (
+                         <img src={`https://picsum.photos/seed/${entry.entryId}/800/600`} alt="Proof of Work" className="w-full h-full object-cover" />
+                       )}
                      </div>
                      
                      <div className="p-4">
@@ -516,6 +444,48 @@ const Profile = () => {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- Edit Profile Modal --- */}
+      {isEditingProfile && (
+        <div className="fixed inset-0 bg-[#1D1C1D]/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <h2 className="text-2xl font-extrabold text-[#1D1C1D] mb-6">Edit Profile</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">Full Name</label>
+                <input type="text" value={editForm.name || ''} onChange={e => setEditForm({...editForm, name: e.target.value})} className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#00875a] focus:border-transparent outline-none font-medium" />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">Primary Trade/Skill</label>
+                <input type="text" value={editForm.trade || ''} onChange={e => setEditForm({...editForm, trade: e.target.value})} className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#00875a] focus:border-transparent outline-none font-medium" />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">District</label>
+                <input type="text" value={editForm.district || ''} onChange={e => setEditForm({...editForm, district: e.target.value})} className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#00875a] focus:border-transparent outline-none font-medium" />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">Bio</label>
+                <textarea value={editForm.bio || ''} onChange={e => setEditForm({...editForm, bio: e.target.value})} className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#00875a] focus:border-transparent outline-none min-h-[100px] font-medium"></textarea>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-8">
+              <button onClick={() => setIsEditingProfile(false)} className="px-5 py-2.5 rounded-xl font-bold text-gray-500 hover:bg-gray-100 transition-colors">Cancel</button>
+              <button 
+                onClick={async () => {
+                  try {
+                    const updated = await updateUser(user.id, editForm);
+                    setUserData(updated);
+                    setIsEditingProfile(false);
+                  } catch (e) { console.error("Failed to update user", e); }
+                }} 
+                className="px-6 py-2.5 rounded-xl font-bold bg-[#00875a] text-white hover:bg-[#006b47] shadow-md transition-all active:scale-95"
+              >
+                Save Changes
+              </button>
             </div>
           </div>
         </div>

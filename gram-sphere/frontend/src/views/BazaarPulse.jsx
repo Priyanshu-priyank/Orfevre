@@ -1,28 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { ShoppingBag, TrendingUp, Package, Plus, Search, Tag, Loader2, Sparkles, AlertCircle } from 'lucide-react';
-import { getDemandForecast, updateInventory, generateListing } from '../api';
+import { getDemandForecast, updateInventory, generateListing, getInventory } from '../api';
 import { useAuth } from '../context/AuthContext';
 
 const BazaarPulse = () => {
   const { user } = useAuth();
-  const [inventory, setInventory] = useState([
-    { id: 1, name: 'Hand-woven Silk Saree', stock: 12, price: 4500, category: 'Apparel' },
-    { id: 2, name: 'Terracotta Vase', stock: 5, price: 850, category: 'Home Decor' },
-  ]);
+  const [inventory, setInventory] = useState([]);
   const [forecast, setForecast] = useState(null);
   const [listingText, setListingText] = useState("");
   const [generatedListing, setGeneratedListing] = useState(null);
   const [loading, setLoading] = useState(false);
   const [genLoading, setGenLoading] = useState(false);
 
-  // Load forecast on mount
+  // Load forecast & inventory on mount
   useEffect(() => {
     setLoading(true);
-    getDemandForecast('Weaver', 'Mysuru', 'May', ['Saree', 'Dhoti'])
-      .then(setForecast)
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
+    const vendorId = user?.id || 'unknown';
+    
+    Promise.all([
+      getDemandForecast('Weaver', 'Mysuru', 'May', ['Saree', 'Dhoti']).then(setForecast).catch(console.error),
+      getInventory(vendorId).then(data => setInventory(data.inventory || [])).catch(console.error)
+    ]).finally(() => setLoading(false));
+  }, [user]);
 
   const handleUpdateStock = async (id, newStock) => {
     const newInv = inventory.map(item => item.id === id ? { ...item, stock: newStock } : item);
